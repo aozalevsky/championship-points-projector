@@ -90,20 +90,20 @@ npm run verify:moto  # same for bikes (e.g. npm run verify:moto -- moto3 2026)
 npm run screenshot   # headless screenshot via Playwright (needs: npx playwright install chromium)
 ```
 
-## Deployment (Cloudflare Pages)
+## Deployment (Cloudflare Workers or Pages)
 
-The repo is ready for Cloudflare Pages with GitHub integration:
+The repo supports both Cloudflare flavors:
 
-1. Push to GitHub.
-2. Cloudflare dashboard → **Workers & Pages → Create → Pages → Connect to Git**, pick the
-   repo, set **build command** `npm run build` and **build output directory** `dist`.
-3. Done. `functions/api/motogp/[[path]].js` is picked up automatically and serves the
-   MotoGP proxy in production (the local equivalent lives in `vite.config.ts`);
-   `.node-version` pins Node 22 for the build.
+- **Workers** (what the current dashboard creates, `*.workers.dev`): `wrangler.jsonc` +
+  `worker/index.js` serve the built app as static assets and handle the `/api/motogp/*`
+  proxy. With the GitHub integration, set build command `npm run build` and deploy
+  command `npx wrangler deploy`. Test locally with `npm run build && npx wrangler dev`.
+- **Pages** (classic, `*.pages.dev`): build command `npm run build`, output `dist`;
+  `functions/api/motogp/[[path]].js` provides the same proxy automatically.
 
-Any purely static host (e.g. GitHub Pages) also works, but without the proxy the
-MotoGP/Moto2/Moto3 series will show the "data not available" fallback — Formula 1 is
-unaffected.
+`.node-version` pins Node 22 for the build. Any purely static host (e.g. GitHub Pages)
+also works, but without the proxy the MotoGP/Moto2/Moto3 series show the "data not
+available" fallback — Formula 1 is unaffected.
 
 ## Architecture
 
