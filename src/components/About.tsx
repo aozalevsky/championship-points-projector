@@ -110,7 +110,11 @@ export function About({ onClose }: { onClose: () => void }) {
             D3
           </a>{' '}
           (scales and monotone splines). Driver, rider and team icons are generated SVGs; team
-          colors follow the familiar broadcast palettes.
+          colors follow the familiar broadcast palettes. The source code is{' '}
+          <a style={link} href="https://github.com/aozalevsky/championship-points-projector">
+            on GitHub
+          </a>{' '}
+          under the MIT license.
         </p>
 
         <h3 style={{ color: UI.text, fontSize: 14, marginBottom: 4 }}>Disclaimer</h3>
