@@ -5,6 +5,8 @@ range of final championship positions each one can still reach, rendered as a
 fan/sankey-style uncertainty plot in an f1.com-inspired dark theme. Covers Formula 1
 (1950–today) and MotoGP/Moto2/Moto3.
 
+**Live: <https://championship-points-projector.aozalevsky.workers.dev/>**
+
 ![screenshot](docs/screenshot.png)
 
 ## What it shows
@@ -126,3 +128,9 @@ scripts/
   verify-moto.ts   MotoGP/Moto2/Moto3 data-integrity check
   screenshot.mjs   headless render check
 ```
+
+## License
+
+[MIT](LICENSE). Data remains the property of its respective owners (Formula One
+Group / FIA for F1 results, Dorna Sports for MotoGP results); this project is an
+unofficial, unaffiliated fan tool.
