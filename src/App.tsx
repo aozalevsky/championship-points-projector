@@ -17,7 +17,7 @@ type LoadState =
 
 export default function App() {
   const [seriesId, setSeriesId] = useState<SeriesId>('f1');
-  const [season, setSeason] = useState(2025);
+  const [season, setSeason] = useState(CURRENT_SEASON);
   const [reloadKey, setReloadKey] = useState(0);
   const [load, setLoad] = useState<LoadState | null>(null);
   const [progressMsg, setProgressMsg] = useState<{ key: string; msg: string } | null>(null);
