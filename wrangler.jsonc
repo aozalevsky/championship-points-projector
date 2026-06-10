@@ -1,5 +1,5 @@
 {
-  "name": "cpp",
+  "name": "championship-points-projector",
   "main": "worker/index.js",
   "compatibility_date": "2026-01-01",
   "assets": {
