@@ -42,9 +42,14 @@ for (const o of official) {
   }
 }
 console.log(mismatches === 0 ? 'All driver totals match official standings ✓' : `${mismatches} mismatches ✗`);
+if (mismatches > 0) process.exitCode = 1;
+if (model.completedCount === 0) {
+  console.log('No completed events yet — skipping projection checks.');
+  process.exit(process.exitCode ?? 0);
+}
 
 // projection sanity at ~75% cutoff
-const cutoff = Math.round(model.completedCount * 0.75);
+const cutoff = Math.max(1, Math.round(model.completedCount * 0.75));
 const proj = projectSeason(model, cutoff);
 console.log(`\nProjection after segment ${cutoff} (${model.segments[cutoff - 1].shortName}):`);
 for (const p of proj.slice(0, 6)) {
@@ -72,6 +77,7 @@ if (bundle.constructors) {
           .join(', ')})`
       : `${ctorBad} constructor mismatches ✗`,
   );
+  if (ctorBad > 0) process.exitCode = 1;
 } else {
   console.log('No constructors championship this season (pre-1958)');
 }
@@ -91,3 +97,4 @@ for (const p of proj) {
   check(p.bestFinalRank > p.worstFinalRank, `best>worst for ${p.driver.code}`);
 }
 console.log(bad === 0 ? 'Projection invariants hold ✓' : `${bad} invariant violations ✗`);
+if (bad > 0) process.exitCode = 1;

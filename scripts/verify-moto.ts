@@ -43,6 +43,7 @@ for (const o of standings.classification) {
 console.log(
   mismatches === 0 ? 'All rider totals match official standings ✓' : `${mismatches} mismatches ✗`,
 );
+if (mismatches > 0) process.exitCode = 1;
 
 if (bundle.constructors) {
   console.log(
@@ -56,6 +57,10 @@ if (bundle.constructors) {
 
 // per-segment dump for the leader, to spot duplicates
 const leader = model.drivers[0];
+if (!leader) {
+  console.log('No completed events yet — skipping leader dump.');
+  process.exit(process.exitCode ?? 0);
+}
 console.log(`\nLeader ${leader.driver.id} per segment:`);
 model.segments.slice(0, model.completedCount).forEach((s, i) => {
   const pts = leader.pointsBySegment[i];

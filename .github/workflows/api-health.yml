@@ -1,0 +1,96 @@
+name: API health
+
+on:
+  schedule:
+    - cron: '17 * * * *' # shallow checks, hourly
+    - cron: '43 5 * * *' # deep data-integrity check, daily
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: api-health
+  cancel-in-progress: false
+
+env:
+  PROD_URL: https://championship-points-projector.aozalevsky.workers.dev
+
+jobs:
+  shallow:
+    name: Shallow endpoint checks
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 * * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Production worker proxy serves MotoGP data
+        run: |
+          year=$(date -u +%Y)
+          curl -fsS --max-time 30 "$PROD_URL/api/motogp/results/seasons" \
+            | jq -e --argjson y "$year" 'any(.[]; .year == $y)' > /dev/null
+          echo "proxy OK"
+
+      - name: Upstream motogp.com API reachable (distinguishes API-down from proxy-broken)
+        if: always()
+        run: |
+          year=$(date -u +%Y)
+          curl -fsS --max-time 30 "https://api.motogp.pulselive.com/motogp/v1/results/seasons" \
+            | jq -e --argjson y "$year" 'any(.[]; .year == $y)' > /dev/null
+          echo "upstream OK"
+
+      - name: Jolpica F1 API reachable
+        if: always()
+        run: |
+          year=$(date -u +%Y)
+          curl -fsS --max-time 30 "https://api.jolpi.ca/ergast/f1/$year.json" \
+            | jq -e '.MRData.RaceTable.Races | length > 0' > /dev/null
+          echo "jolpica OK"
+
+      - name: Production site serves the app
+        if: always()
+        run: |
+          curl -fsS --max-time 30 "$PROD_URL/" | grep -q "Championship Points Projector"
+          echo "site OK"
+
+  deep:
+    name: Deep data-integrity check
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '43 5 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: F1 totals match official standings
+        run: npm run verify -- $(date -u +%Y)
+      - name: MotoGP totals match official standings
+        if: always()
+        run: npm run verify:moto -- motogp $(date -u +%Y)
+
+  report:
+    name: Open or update issue on failure
+    needs: [shallow, deep]
+    if: always() && contains(needs.*.result, 'failure')
+    runs-on: ubuntu-latest
+    steps:
+      - name: File issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SHALLOW: ${{ needs.shallow.result }}
+          DEEP: ${{ needs.deep.result }}
+        run: |
+          title="API health check failing"
+          body="Health check failed (shallow: $SHALLOW, deep: $DEEP).
+
+          See the run log for which endpoint/check broke: $RUN_URL"
+          existing=$(gh issue list --repo "$REPO" --state open --search "in:title \"$title\"" \
+            --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$REPO" --body "Still failing: $RUN_URL (shallow: $SHALLOW, deep: $DEEP)"
+          else
+            gh issue create --repo "$REPO" --title "$title" --body "$body"
+          fi
