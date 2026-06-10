@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PROD_URL: https://championship-points-projector.aozalevsky.workers.dev
+  PROD_URL: https://cpp.aozalevsky.workers.dev
 
 jobs:
   shallow:

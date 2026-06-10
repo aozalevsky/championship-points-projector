@@ -5,7 +5,7 @@ range of final championship positions each one can still reach, rendered as a
 fan/sankey-style uncertainty plot in an f1.com-inspired dark theme. Covers Formula 1
 (1950–today) and MotoGP/Moto2/Moto3.
 
-**Live: <https://championship-points-projector.aozalevsky.workers.dev/>**
+**Live: <https://cpp.aozalevsky.workers.dev/>**
 
 ![screenshot](docs/screenshot.png)
 
