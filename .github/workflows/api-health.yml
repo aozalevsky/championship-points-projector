@@ -92,5 +92,5 @@ jobs:
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --repo "$REPO" --body "Still failing: $RUN_URL (shallow: $SHALLOW, deep: $DEEP)"
           else
-            gh issue create --repo "$REPO" --title "$title" --body "$body"
+            gh issue create --repo "$REPO" --title "$title" --body "$body" --assignee aozalevsky
           fi
