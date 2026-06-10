@@ -17,6 +17,8 @@ interface Props {
   /** rescale the y axis to the current cutoff's max instead of the season max */
   autoScaleY: boolean;
   onSegmentClick: (segIndex: number) => void;
+  /** ids excluded from rendering (ranks are still computed from everyone) */
+  hidden: Set<string>;
 }
 
 export function Chart({
@@ -28,6 +30,7 @@ export function Chart({
   onCutoffChange,
   autoScaleY,
   onSegmentClick,
+  hidden,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -53,16 +56,20 @@ export function Chart({
     () => scaleLinear().domain([0, nSeg]).range([0, innerW]),
     [nSeg, innerW],
   );
+  const visible = useMemo(
+    () => projections.filter((p) => !hidden.has(p.driver.id)),
+    [projections, hidden],
+  );
+
   // fixed scale = the most points anyone could take from the whole season,
-  // so the axis stays put while scrubbing; auto = tight fit to current cutoff
+  // so the axis stays put while scrubbing; auto = tight fit to the visible field
   const seasonMax = useMemo(
     () => model.segments.reduce((sum, s) => sum + s.maxPoints, 0),
     [model],
   );
   const yMax = useMemo(
-    () =>
-      autoScaleY ? Math.max(10, ...projections.map((p) => p.maxFinal)) : Math.max(10, seasonMax),
-    [autoScaleY, projections, seasonMax],
+    () => (autoScaleY ? Math.max(10, ...visible.map((p) => p.maxFinal)) : Math.max(10, seasonMax)),
+    [autoScaleY, visible, seasonMax],
   );
   // axis tops out exactly at the highest theoretically attainable total
   const y = useMemo(
@@ -90,7 +97,7 @@ export function Chart({
   // shrink the gap if the field doesn't fit, push down from the top, then
   // push back up from the bottom — order is preserved and 0 ≤ y ≤ innerH
   const labels = useMemo(() => {
-    const items = projections.map((p) => ({
+    const items = visible.map((p) => ({
       p,
       target: y((p.minFinal + p.maxFinal) / 2),
       yPos: 0,
@@ -108,7 +115,7 @@ export function Chart({
       next = items[i].yPos;
     }
     return items;
-  }, [projections, y, innerH]);
+  }, [visible, y, innerH]);
 
   const hoveredProj = hovered ? projections.find((p) => p.driver.id === hovered) : null;
 
@@ -164,7 +171,7 @@ export function Chart({
   const endDrag = () => setDragging(false);
 
   // draw in reverse championship order so the leader ends up on top
-  const drawOrder = [...projections].reverse();
+  const drawOrder = [...visible].reverse();
 
   return (
     <div ref={containerRef} style={{ width: '100%', position: 'relative' }}>

@@ -29,6 +29,8 @@ export default function App() {
   const [championship, setChampionship] = useState<'drivers' | 'constructors'>('drivers');
   // open results modal, tied to the load it was opened for
   const [resultsSeg, setResultsSeg] = useState<{ key: string; index: number } | null>(null);
+  // hidden drivers/constructors (visual only — ranks still use the full field)
+  const [hiddenSel, setHiddenSel] = useState<{ key: string; ids: Set<string> } | null>(null);
 
   const series = seriesById(seriesId);
   const seasons = useMemo(
@@ -91,6 +93,24 @@ export default function App() {
     () => (model ? projectSeason(model, effectiveCutoff) : []),
     [model, effectiveCutoff],
   );
+
+  const selKey = `${requestKey}:${championship}`;
+  const hidden = useMemo(
+    () => (hiddenSel && hiddenSel.key === selKey ? hiddenSel.ids : new Set<string>()),
+    [hiddenSel, selKey],
+  );
+  const toggleVisible = (id: string) => {
+    const next = new Set(hidden);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setHiddenSel({ key: selKey, ids: next });
+  };
+  const setAllVisible = (visible: boolean) => {
+    setHiddenSel({
+      key: selKey,
+      ids: visible ? new Set() : new Set(projections.map((p) => p.driver.id)),
+    });
+  };
 
   const cutoffSegment =
     model && effectiveCutoff > 0 ? model.segments[effectiveCutoff - 1] : null;
@@ -389,6 +409,7 @@ export default function App() {
                 onCutoffChange={(v) => setCutoffChoice({ key: requestKey, value: v })}
                 autoScaleY={autoScaleY}
                 onSegmentClick={(index) => setResultsSeg({ key: requestKey, index })}
+                hidden={hidden}
               />
             </div>
             <Standings
@@ -401,6 +422,9 @@ export default function App() {
                   : series.entityWord
               }
               isConstructors={championship === 'constructors' && hasConstructors}
+              hidden={hidden}
+              onToggleVisible={toggleVisible}
+              onSetAllVisible={setAllVisible}
             />
           </div>
 
