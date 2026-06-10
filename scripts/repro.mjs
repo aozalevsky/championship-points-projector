@@ -1,0 +1,11 @@
+import { chromium } from 'playwright';
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 1600, height: 1100 }, deviceScaleFactor: 3 });
+const errors = [];
+page.on('pageerror', (e) => errors.push(e.message));
+await page.goto('http://localhost:5180/');
+await page.waitForSelector('svg path', { timeout: 60000 });
+await page.waitForTimeout(500);
+await page.screenshot({ path: '/tmp/f1u-logo.png', clip: { x: 0, y: 0, width: 560, height: 75 } });
+console.log(errors.length ? 'ERRORS: ' + errors.join('; ') : 'no errors');
+await browser.close();
