@@ -91,7 +91,9 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function fetchJson(url: string): Promise<MRData> {
   for (let attempt = 0; ; attempt++) {
-    const res = await fetch(url);
+    // bypass the browser HTTP cache: Jolpica sends max-age=3600, which would
+    // otherwise defeat the ⟳ Refresh button — localStorage is our only cache
+    const res = await fetch(url, { cache: 'no-store' });
     if (res.status === 429 && attempt < 3) {
       await sleep(1500 * (attempt + 1));
       continue;

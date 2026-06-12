@@ -103,7 +103,9 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function getJson<T>(path: string): Promise<T> {
   for (let attempt = 0; ; attempt++) {
-    const res = await fetch(`${BASE}${path}`);
+    // bypass the browser HTTP cache so ⟳ Refresh truly refetches;
+    // localStorage (and the worker's short edge cache) handle caching
+    const res = await fetch(`${BASE}${path}`, { cache: 'no-store' });
     if ((res.status === 429 || res.status >= 500) && attempt < 3) {
       await sleep(1200 * (attempt + 1));
       continue;
