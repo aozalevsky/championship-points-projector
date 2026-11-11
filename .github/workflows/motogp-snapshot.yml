@@ -1,0 +1,57 @@
+name: MotoGP snapshot
+
+# Builds MotoGP/Moto2/Moto3 season JSON from the motogp.com API (reachable
+# from GitHub runners) and commits it to the `motogp-data` branch. The app
+# loads these from raw.githubusercontent.com when the /api/motogp proxy is
+# blocked. The first runs backfill older seasons within a time budget.
+
+on:
+  schedule:
+    - cron: '23 */2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: motogp-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Check out the data branch
+        run: |
+          if git ls-remote --exit-code --heads origin motogp-data > /dev/null; then
+            git fetch --depth=1 origin motogp-data
+            git worktree add --detach data FETCH_HEAD
+          else
+            git worktree add --orphan -b motogp-data data
+          fi
+
+      - name: Build snapshots
+        run: npm run snapshot:moto -- data --budget-min 35
+
+      - name: Commit and push
+        # also after a failed refresh of recent seasons, so backfill progress is kept
+        if: always()
+        working-directory: data
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "no changes"
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898276+github-actions[bot]@users.noreply.github.com' \
+              commit -q -m "MotoGP snapshot $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push origin HEAD:refs/heads/motogp-data

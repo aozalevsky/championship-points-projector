@@ -58,10 +58,14 @@ as awarded. Season scoring rules (`src/data/scoring.ts`) are only used to projec
 **MotoGP / Moto2 / Moto3** results come from the unofficial **motogp.com** results API
 (© Dorna Sports, not affiliated; endpoints documented by
 [robschmitt/MotoGP-API](https://github.com/robschmitt/MotoGP-API)). That API rejects
-requests carrying a browser `Origin` header, so the dev/preview server proxies it
-(`/api/motogp`, see `vite.config.ts`). When the proxy or the API is unavailable, the app
-shows a "data is not available" fallback notice instead — the same fallback covers
-Jolpica/F1 outages. Two robustness details: red-flagged restarted races leave two race
+requests carrying a browser `Origin` header, so the app calls a same-origin proxy
+(`/api/motogp`: the Vite dev/preview server, `worker/index.js` in production). Since
+autumn 2026 the production proxy has been getting 403s from motogp.com's CDN
+(apparently a block on Cloudflare's network); the app then falls back to season snapshots that the
+`MotoGP snapshot` workflow builds every two hours on GitHub runners
+(`scripts/snapshot-moto.ts`) and commits to the `motogp-data` branch, served from
+raw.githubusercontent.com. When neither is available, the app shows a "data is not
+available" fallback notice instead — the same fallback covers Jolpica/F1 outages. Two robustness details: red-flagged restarted races leave two race
 sessions in the API and only the points-bearing one is counted; and post-race penalties
 that only appear in the official standings (not in per-race classifications) are
 reconciled by applying the difference at the latest completed event. Scoring: top 15

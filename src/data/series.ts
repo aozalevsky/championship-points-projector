@@ -45,7 +45,7 @@ export const SERIES: SeriesDef[] = [
       sourceName: 'unofficial motogp.com API (© Dorna Sports, not affiliated)',
       sourceUrl: 'https://github.com/robschmitt/MotoGP-API',
       fallbackHint:
-        'The motogp.com API blocks direct browser requests, so the app relies on the local dev/preview server proxy. Make sure you are running via "npm run dev" or "npm run preview", or the API itself may be unavailable right now.',
+        'The motogp.com API blocks direct browser requests, so the app goes through a same-origin proxy and falls back to periodic snapshots of the results. Both are unavailable for this season right now — the API may be down, or no snapshot of this season has been built yet.',
       loadSeason: (season, onProgress) => loadMotoSeason(id, season, onProgress),
       clearCache: (season) => clearMotoCache(id, season),
     }),

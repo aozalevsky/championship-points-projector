@@ -1,9 +1,13 @@
 /**
  * Adapter for the unofficial motogp.com results API (api.motogp.pulselive.com).
  * Not affiliated with Dorna Sports. The API rejects requests that carry a
- * browser Origin header, so in the browser we go through the local dev-server
- * proxy (/api/motogp, see vite.config.ts); any failure surfaces as a normal
- * error and the app shows its "data unavailable" fallback.
+ * browser Origin header, so in the browser we go through a same-origin proxy
+ * (/api/motogp: the Vite dev server, the Cloudflare Worker or Pages function).
+ * If the proxy fails (motogp.com's CDN also blocks Cloudflare's network), the
+ * browser falls back to prebuilt season snapshots that a scheduled GitHub
+ * Action publishes to the `motogp-data` branch (scripts/snapshot-moto.ts).
+ * If both fail, the error surfaces and the app shows its "data unavailable"
+ * fallback.
  */
 
 import { flagFromIso, makeStandaloneEntity } from './model';
@@ -22,6 +26,10 @@ const BASE =
     : '/api/motogp';
 
 const CACHE_PREFIX = 'f1u:motogp:v3:';
+
+/** Season snapshots (SeasonBundle JSON) built by scripts/snapshot-moto.ts. */
+export const SNAPSHOT_BASE =
+  'https://raw.githubusercontent.com/aozalevsky/championship-points-projector/motogp-data';
 
 export type MotoSeriesId = 'motogp' | 'moto2' | 'moto3';
 
@@ -185,13 +193,42 @@ export async function loadMotoSeason(
   season: number,
   onProgress?: (message: string) => void,
 ): Promise<SeasonBundle> {
-  const spec = MOTO_SERIES[series];
   const now = new Date();
   const finished = season < now.getFullYear();
   const maxAge = finished ? Infinity : 60 * 60 * 1000;
 
   const cached = cacheGet(`${series}:${season}`, maxAge);
   if (cached) return cached as SeasonBundle;
+
+  let bundle: SeasonBundle;
+  try {
+    bundle = await buildMotoSeason(series, season, onProgress);
+  } catch (liveError) {
+    if (typeof window === 'undefined') throw liveError; // node scripts: no fallback
+    onProgress?.('Live API unavailable — loading snapshot…');
+    try {
+      bundle = await fetchSnapshot(series, season);
+    } catch {
+      throw liveError;
+    }
+  }
+  cacheSet(`${series}:${season}`, bundle);
+  return bundle;
+}
+
+async function fetchSnapshot(series: MotoSeriesId, season: number): Promise<SeasonBundle> {
+  const res = await fetch(`${SNAPSHOT_BASE}/${series}/${season}.json`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`no snapshot for ${series} ${season} (${res.status})`);
+  return (await res.json()) as SeasonBundle;
+}
+
+/** Build a season straight from the motogp.com API (no caching, no fallback). */
+export async function buildMotoSeason(
+  series: MotoSeriesId,
+  season: number,
+  onProgress?: (message: string) => void,
+): Promise<SeasonBundle> {
+  const spec = MOTO_SERIES[series];
 
   onProgress?.('Looking up season…');
   const seasons = await getJson<ApiSeason[]>('/results/seasons');
@@ -477,7 +514,5 @@ export async function loadMotoSeason(
       'Constructors’ championship: only the best-placed bike of each constructor scores, in every race and sprint. The official standings PDF is the authority — post-race penalties may not be reflected here.',
   };
 
-  const bundle: SeasonBundle = { drivers: model, constructors: constructorsModel };
-  cacheSet(`${series}:${season}`, bundle);
-  return bundle;
+  return { drivers: model, constructors: constructorsModel };
 }
