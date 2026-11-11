@@ -94,6 +94,7 @@ interface ApiSession {
   id: string;
   type: string; // RAC, SPR, FP, Q...
   date: string;
+  status?: 'FINISHED' | 'CANCELLED' | string;
 }
 
 interface ApiClassificationRow {
@@ -323,8 +324,10 @@ export async function buildMotoSeason(
     const fetchTypeRows = async (
       type: string,
     ): Promise<{ rows: ApiClassificationRow[]; date?: string } | null> => {
+      // a cancelled session (e.g. 2026 Australian GP race) never gets results;
+      // treat it like a session that never existed
       const matches = sessions
-        .filter((s) => s.type === type)
+        .filter((s) => s.type === type && s.status !== 'CANCELLED')
         .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
       if (matches.length === 0) return null;
       let rows: ApiClassificationRow[] = [];
@@ -353,34 +356,25 @@ export async function buildMotoSeason(
           completed: true, // refined below from rows
         },
       });
-    } else if (expectSprint) {
-      // finished event that should have had a sprint (e.g. cancelled Saturday)
+    }
+    // no (or a cancelled) sprint at a finished event: it will never be run, so
+    // leave it out — an empty segment would end the completed prefix here and
+    // hide every later event
+    const race = await fetchTypeRows('RAC');
+    if (race) {
       collected.push({
-        rows: [],
+        rows: race.rows,
         segment: {
           ...base,
-          key: `${round}-sprint`,
-          type: 'sprint',
-          shortName: `${code} S`,
-          date: ev.date_start,
-          maxPoints: MAX_SPRINT_POINTS,
-          completed: false,
+          key: `${round}-race`,
+          type: 'race',
+          shortName: code,
+          date: race.date?.slice(0, 10) ?? ev.date_end,
+          maxPoints: MAX_RACE_POINTS,
+          completed: true,
         },
       });
     }
-    const race = await fetchTypeRows('RAC');
-    collected.push({
-      rows: race?.rows ?? [],
-      segment: {
-        ...base,
-        key: `${round}-race`,
-        type: 'race',
-        shortName: code,
-        date: race?.date?.slice(0, 10) ?? ev.date_end,
-        maxPoints: MAX_RACE_POINTS,
-        completed: true,
-      },
-    });
     await sleep(120); // be polite to the API
   }
 
