@@ -9,6 +9,7 @@ on:
 permissions:
   contents: read
   issues: write
+  actions: read # list this run's failed steps
 
 concurrency:
   group: api-health
@@ -16,6 +17,7 @@ concurrency:
 
 env:
   PROD_URL: https://cpp.aozalevsky.workers.dev
+  SNAPSHOT_URL: https://raw.githubusercontent.com/aozalevsky/championship-points-projector/motogp-data
 
 jobs:
   shallow:
@@ -23,12 +25,21 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 * * * *'
     runs-on: ubuntu-latest
     steps:
-      - name: Production worker proxy serves MotoGP data
+      - name: App can load MotoGP data (worker proxy, else fresh snapshot)
         run: |
           year=$(date -u +%Y)
-          curl -fsS --max-time 30 "$PROD_URL/api/motogp/results/seasons" \
-            | jq -e --argjson y "$year" 'any(.[]; .year == $y)' > /dev/null
-          echo "proxy OK"
+          if curl -fsS --max-time 30 "$PROD_URL/api/motogp/results/seasons" \
+              | jq -e --argjson y "$year" 'any(.[]; .year == $y)' > /dev/null; then
+            echo "proxy OK"
+            exit 0
+          fi
+          echo "::warning::worker proxy for the motogp.com API is failing; checking the snapshot fallback"
+          index=$(curl -fsS --max-time 30 "$SNAPSHOT_URL/index.json")
+          age_h=$(( ($(date -u +%s) - $(date -u -d "$(jq -r .generatedAt <<< "$index")" +%s)) / 3600 ))
+          echo "snapshot is ${age_h}h old"
+          [ "$age_h" -le 12 ] || { echo "::error::snapshot older than 12h"; exit 1; }
+          curl -fsS --max-time 30 "$SNAPSHOT_URL/motogp/$year.json" | jq -e '.drivers.segments | length > 0' > /dev/null
+          echo "snapshot OK"
 
       - name: Upstream motogp.com API reachable (distinguishes API-down from proxy-broken)
         if: always()
@@ -70,27 +81,18 @@ jobs:
         run: npm run verify:moto -- motogp $(date -u +%Y)
 
   report:
-    name: Open or update issue on failure
+    name: Open, update or close the health issue
     needs: [shallow, deep]
-    if: always() && contains(needs.*.result, 'failure')
+    if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: File issue
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/scripts
+      - name: Sync issue with check results
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          SHALLOW: ${{ needs.shallow.result }}
-          DEEP: ${{ needs.deep.result }}
-        run: |
-          title="API health check failing"
-          body="Health check failed (shallow: $SHALLOW, deep: $DEEP).
-
-          See the run log for which endpoint/check broke: $RUN_URL"
-          existing=$(gh issue list --repo "$REPO" --state open --search "in:title \"$title\"" \
-            --json number --jq '.[0].number // empty')
-          if [ -n "$existing" ]; then
-            gh issue comment "$existing" --repo "$REPO" --body "Still failing: $RUN_URL (shallow: $SHALLOW, deep: $DEEP)"
-          else
-            gh issue create --repo "$REPO" --title "$title" --body "$body" --assignee aozalevsky
-          fi
+        run: bash .github/scripts/health-report.sh
