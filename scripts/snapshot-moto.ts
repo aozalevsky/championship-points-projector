@@ -6,12 +6,19 @@
  *
  * Writes <outDir>/<series>/<season>.json and <outDir>/index.json. The current
  * and previous season are always rebuilt; older seasons are only built when
- * their file is missing, newest first, until the time budget runs out — so a
- * full backfill spreads over several scheduled runs.
+ * their file is missing or was built by an older adapter version
+ * (SNAPSHOT_VERSION), newest first, until the time budget runs out — so a
+ * full backfill spreads over several scheduled runs. Outdated files are served
+ * until they are replaced.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildMotoSeason, MOTO_SERIES, type MotoSeriesId } from '../src/data/motogp';
+import {
+  buildMotoSeason,
+  MOTO_SERIES,
+  SNAPSHOT_VERSION,
+  type MotoSeriesId,
+} from '../src/data/motogp';
 
 const args = process.argv.slice(2);
 const outDir = args.find((a) => !a.startsWith('--'));
@@ -28,6 +35,8 @@ const seriesIds = Object.keys(MOTO_SERIES) as MotoSeriesId[];
 
 interface IndexFile {
   generatedAt: string;
+  /** SNAPSHOT_VERSION each season file was built with, keyed "series/season" */
+  versions: Record<string, number>;
   seasons: Record<string, number[]>;
   errors: string[];
 }
@@ -35,12 +44,22 @@ interface IndexFile {
 const errors: string[] = [];
 let failedRecent = false;
 
+const indexPath = join(outDir, 'index.json');
+const previous: Partial<IndexFile> = existsSync(indexPath)
+  ? JSON.parse(readFileSync(indexPath, 'utf8'))
+  : {};
+const versions: Record<string, number> = { ...previous.versions };
+const upToDate = (series: MotoSeriesId, season: number) =>
+  existsSync(join(outDir, series, `${season}.json`)) &&
+  versions[`${series}/${season}`] === SNAPSHOT_VERSION;
+
 async function snapshot(series: MotoSeriesId, season: number): Promise<void> {
   const file = join(outDir!, series, `${season}.json`);
   try {
     const bundle = await buildMotoSeason(series, season);
     mkdirSync(join(outDir!, series), { recursive: true });
     writeFileSync(file, JSON.stringify(bundle));
+    versions[`${series}/${season}`] = SNAPSHOT_VERSION;
     console.log(`ok   ${series} ${season}`);
   } catch (e) {
     const msg = `${series} ${season}: ${(e as Error).message}`;
@@ -64,7 +83,7 @@ const oldest = Math.min(...seriesIds.map((s) => MOTO_SERIES[s].firstSeason));
 backfill: for (let season = currentYear - 2; season >= oldest; season--) {
   for (const series of seriesIds) {
     if (season < MOTO_SERIES[series].firstSeason) continue;
-    if (existsSync(join(outDir, series, `${season}.json`))) continue;
+    if (upToDate(series, season)) continue;
     if (Date.now() > deadline) {
       console.log('time budget used up — remaining seasons next run');
       break backfill;
@@ -81,15 +100,12 @@ for (const series of seriesIds) {
     if (existsSync(join(outDir, series, `${y}.json`))) seasons[series].push(y);
   }
 }
-const indexPath = join(outDir, 'index.json');
-const previous: Partial<IndexFile> = existsSync(indexPath)
-  ? JSON.parse(readFileSync(indexPath, 'utf8'))
-  : {};
 const index: IndexFile = {
   // keep the old timestamp when the recent seasons could not be refreshed,
   // so the health check notices a stale snapshot
   generatedAt: failedRecent && previous.generatedAt ? previous.generatedAt : new Date().toISOString(),
   seasons,
+  versions,
   errors,
 };
 writeFileSync(indexPath, JSON.stringify(index, null, 1) + '\n');

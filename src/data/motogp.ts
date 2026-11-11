@@ -25,7 +25,13 @@ const BASE =
     ? 'https://api.motogp.pulselive.com/motogp/v1' // node scripts hit the API directly
     : '/api/motogp';
 
-const CACHE_PREFIX = 'f1u:motogp:v3:';
+// bump together with SNAPSHOT_VERSION when the adapter's output changes,
+// so browsers drop finished seasons they cached forever
+const CACHE_PREFIX = 'f1u:motogp:v4:';
+
+/** Version of the adapter output; scripts/snapshot-moto.ts rebuilds every
+ *  published season when it differs from the one in the snapshot index. */
+export const SNAPSHOT_VERSION = 2; // 2: cancelled sessions no longer truncate seasons
 
 /** Season snapshots (SeasonBundle JSON) built by scripts/snapshot-moto.ts. */
 export const SNAPSHOT_BASE =
